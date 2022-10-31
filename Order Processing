@@ -1,0 +1,104 @@
+*** Settings ***
+Documentation       Orders robots from RobotSpareBin Industries Inc.
+...                 Saves the order HTML receipt as a PDF file.
+...                 Saves the screenshot of the ordered robot.
+...                 Embeds the screenshot of the robot to the PDF receipt.
+...                 Creates ZIP archive of the receipts and the images.
+
+Library             RPA.Browser.Selenium    auto_close=${False}
+Library             RPA.HTTP
+Library             RPA.Tables
+Library             RPA.Excel.Files
+Library             RPA.Word.Application
+Library             RPA.PDF
+Library             Collections
+#Library    RPA.FTP
+
+
+*** Tasks ***
+Order robots from RobotSpareBin Industries Inc
+    Open the robot order website
+    ${orders}=    Get orders
+    FOR    ${row}    IN    @{orders}
+        Close the annoying modal
+        Fill the form    ${row}
+        Preview the robot
+        Submit the order
+        #${pdf}=    Store the receipt as a PDF file    ${row}#[Order number]
+        Store the receipt as a PDF file    ${row}
+        #${screenshot}=    Take a screenshot of the robot    ${row}[Order number]
+        Take a screenshot of the robot    ${row}
+        #Embed the robot screenshot to the receipt PDF file    ${screenshot}    ${pdf}
+        Embed the robot screenshot to the receipt PDF file    ${row}
+
+        Go to order another robot
+    END
+    # Create a ZIP file of the receipts
+
+
+*** Keywords ***
+Open the robot order website
+    Open Available Browser    https://robotsparebinindustries.com/
+    Input Text    username    maria
+    Input Password    password    thoushallnotpass
+    Click Button    Log in
+    Click Link    Order your robot!
+
+Get orders
+    Download    https://robotsparebinindustries.com/orders.csv    overwrite=True
+
+    #${orders}=    Read table from CSV    ${CURDIR}${/}orders.csv
+    ${orders}=    Read table from CSV    ${CURDIR}${/}orders.csv    header=True
+
+    Log    ${orders}
+    RETURN    ${orders}
+
+Close the annoying modal
+    Click Button    OK
+
+Fill the form
+    [Arguments]    ${row}
+    Select From List By Value    head    ${row}[Head]
+    Select Radio Button    body    ${row}[Body]
+    Input Text    address    ${row}[Address]
+    Input Text    xpath://input[@placeholder="Enter the part number for the legs"]    ${row}[Legs]
+
+Preview the robot
+    Click Button    preview
+
+Submit the order
+    #Click Button    order
+    Wait Until Keyword Succeeds    4x    2s    Click Button When Visible    order
+
+    Click Element If Visible    order
+    Click Element If Visible    order
+
+Store the receipt as a PDF file
+    [Arguments]    ${row}
+    Wait Until Element Is Visible    id:order-completion
+    Log    ${row}[Order number]
+    ${receipt_html}=    Get Element Attribute    order-completion    outerHTML
+    Html To Pdf    ${receipt_html}    ${OUTPUT_DIR}${/}Receipts${/}${row}[Order number].pdf
+    #${pdf} = ${OUTPUT_DIR}${/}Receipts${/}${row}[Order number].pdf
+
+    #RETURN    ${pdf}
+
+Take a screenshot of the robot
+    [Arguments]    ${row}
+    ${screenshot}=    Screenshot    robot-preview-image    ${OUTPUT_DIR}${/}Receipts${/}${row}[Order number].jpg
+
+Embed the robot screenshot to the receipt PDF file
+    [Arguments]    ${row}
+
+    Open Pdf    ${OUTPUT_DIR}${/}Receipts${/}${row}[Order number].pdf
+    #Print To Pdf    ${OUTPUT_DIR}${/}Receipts${/}${row}[Order number].jpg
+    ${files}=    Create List
+    ...    ${OUTPUT_DIR}${/}Receipts${/}${row}[Order number].pdf
+    ...    ${OUTPUT_DIR}${/}Receipts${/}${row}[Order number].jpg
+
+    Add Files To Pdf    ${files}    ${OUTPUT_DIR}${/}Receipts${/}${row}[Order number].pdf
+
+    Close Pdf
+
+Go to order another robot
+    Click Button    order-another
